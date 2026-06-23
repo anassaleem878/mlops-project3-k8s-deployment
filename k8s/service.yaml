@@ -5,7 +5,7 @@ metadata:
   namespace: mlops
 spec:
   selector:
-    app: iris-mlops-app
+    app: iris-api
   ports:
   - protocol: TCP
     port: 80
