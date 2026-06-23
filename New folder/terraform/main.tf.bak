@@ -1,0 +1,179 @@
+# ─── PHASE 1: Start Minikube ───
+resource "null_resource" "minikube_start" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      minikube start --driver=docker --memory=4096 --cpus=2
+      minikube addons enable ingress
+      minikube addons enable metrics-server
+      echo "[TERRAFORM] Minikube started with Nginx Ingress enabled"
+    EOT
+  }
+  provisioner "local-exec" {
+    when    = destroy
+    command = "minikube stop"
+  }
+}
+
+# ─── PHASE 2: Build Docker Image inside Minikube Docker env ───
+resource "null_resource" "build_image" {
+  depends_on = [null_resource.minikube_start]
+  provisioner "local-exec" {
+    command = <<-EOT
+      cd ..
+      eval $(minikube docker-env)
+      docker build -t iris-api:latest .
+      echo "[TERRAFORM] Docker image built in Minikube"
+    EOT
+  }
+}
+
+# ─── PHASE 3: Create Namespace ───
+resource "kubernetes_namespace" "mlops" {
+  depends_on = [null_resource.minikube_start]
+  metadata {
+    name = var.namespace
+    labels = {
+      project  = "mlops-project3"
+      student  = var.student_name
+      sap_id   = var.sap_id
+      semester = "6th"
+    }
+  }
+}
+
+# ─── PHASE 4: K8s Deployment with ReplicaSet ───
+resource "kubernetes_deployment" "iris_api" {
+  depends_on = [
+    kubernetes_namespace.mlops,
+    null_resource.build_image
+  ]
+  metadata {
+    name      = var.app_name
+    namespace = var.namespace
+    labels = {
+      app     = var.app_name
+      project = "mlops-project3"
+    }
+  }
+  spec {
+    replicas = var.replica_count
+    selector {
+      match_labels = { app = var.app_name }
+    }
+    template {
+      metadata {
+        labels = { app = var.app_name }
+      }
+      spec {
+        container {
+          name              = "iris-api"
+          image             = var.image_name
+          image_pull_policy = "Never"
+          port {
+            container_port = var.app_port
+          }
+          env {
+            name  = "MLFLOW_TRACKING_URI"
+            value = var.mlflow_uri
+          }
+          env {
+            name  = "MLFLOW_TRACKING_USERNAME"
+            value = var.mlflow_username
+              }
+          env {
+            name  = "MLFLOW_TRACKING_PASSWORD"
+            value = var.mlflow_token
+              }
+          resources {
+            requests = {
+              memory = "128Mi"
+              cpu    = "250m"
+            }
+            limits = {
+              memory = "256Mi"
+              cpu    = "500m"
+            }
+          }
+          liveness_probe {
+            http_get {
+              path = "/health"
+              port = var.app_port
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
+          readiness_probe {
+            http_get {
+              path = "/health"
+              port = var.app_port
+            }
+            initial_delay_seconds = 5
+            period_seconds        = 5
+          }
+        }
+      }
+    }
+  }
+}
+
+# ─── PHASE 5: NodePort Service ───
+resource "kubernetes_service" "iris_api" {
+  depends_on = [kubernetes_deployment.iris_api]
+  metadata {
+    name      = "${var.app_name}-service"
+    namespace = var.namespace
+  }
+  spec {
+    selector = { app = var.app_name }
+    port {
+      port        = 80
+      target_port = var.app_port
+      node_port   = 30007
+    }
+    type = "NodePort"
+  }
+}
+
+# ─── PHASE 6: Nginx Ingress (Load Balancer) ───
+resource "kubernetes_ingress_v1" "iris_api" {
+  depends_on = [kubernetes_service.iris_api]
+  metadata {
+    name      = "${var.app_name}-ingress"
+    namespace = var.namespace
+    annotations = {
+      "nginx.ingress.kubernetes.io/rewrite-target" = "/"
+    }
+  }
+  spec {
+    ingress_class_name = "nginx"
+    rule {
+      host = "iris-api.local"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+          backend {
+            service {
+              name = "${var.app_name}-service"
+              port { number = 80 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# ─── OUTPUTS ───
+output "namespace" {
+  value = kubernetes_namespace.mlops.metadata[0].name
+}
+output "replica_count" {
+  value = var.replica_count
+}
+output "app_url" {
+  value = "Run: minikube service ${var.app_name}-service -n ${var.namespace} --url"
+}
+output "student" {
+  value = "${var.student_name} | SAP: ${var.sap_id}"
+}

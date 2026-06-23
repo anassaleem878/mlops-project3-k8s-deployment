@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iris-mlops-app
+  namespace: mlops
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: iris-api
+  template:
+    metadata:
+      labels:
+        app: iris-api
+    spec:
+      containers:
+      - name: iris-api
+        image: anassaleem878/iris-api:latest # Use your DockerHub username
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "https://dagshub.com/anassaleem878/mlops-project3.mlflow"
+        - name: MLFLOW_TRACKING_USERNAME
+          value: "anassaleem878"
+        - name: MLFLOW_TRACKING_PASSWORD
+          value: "c6931f0db93def701315ed01e51aa16fb2f4f66d"
+        ports:
+        - containerPort: 7000

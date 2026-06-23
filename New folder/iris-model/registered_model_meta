@@ -1,0 +1,2 @@
+model_name: iris-k8s-classifier
+model_version: '2'
