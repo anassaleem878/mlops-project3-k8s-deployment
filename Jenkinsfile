@@ -23,8 +23,8 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 // Tells the ReplicaSet to restart, forcing it to download the fresh Production model
-                sh 'kubectl rollout restart deployment iris-mlops-app -n mlops'
-                sh 'kubectl rollout status deployment iris-mlops-app -n mlops'
+                sh '/usr/local/bin/kubectl-anas rollout restart deployment iris-mlops-app -n mlops'
+                sh '/usr/local/bin/kubectl-anas rollout status deployment iris-mlops-app -n mlops'
             }
         }
     }
