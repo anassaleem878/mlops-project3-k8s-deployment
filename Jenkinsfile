@@ -1,6 +1,7 @@
 pipeline {
     agent any
     environment {
+        PYTHONPATH = "/home/anas/.local/lib/python3.14/site-packages"
         MLFLOW_TRACKING_URI      = "https://dagshub.com/anassaleem878/mlops-project3.mlflow"
         MLFLOW_TRACKING_USERNAME = "anassaleem878"
         MLFLOW_TRACKING_PASSWORD = "c6931f0db93def701315ed01e51aa16fb2f4f66d"
